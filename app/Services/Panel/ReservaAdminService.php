@@ -9,6 +9,7 @@ use App\Models\Reserva;
 use App\Models\ReservaHistorial;
 use App\Models\ReservaPlato;
 use App\Models\User;
+use App\Services\Notificaciones\ReservaNotificaciones;
 use App\Services\Reservas\DisponibilidadService;
 use App\Services\Reservas\PreordenService;
 use App\Services\Reservas\ReservaService;
@@ -24,6 +25,7 @@ class ReservaAdminService
         private readonly DisponibilidadService $disponibilidad,
         private readonly PreordenService $preorden,
         private readonly ReservaService $reservas,
+        private readonly ReservaNotificaciones $notificaciones,
     ) {}
 
     /**
@@ -33,7 +35,7 @@ class ReservaAdminService
      */
     public function crear(User $admin, array $datos): Reserva
     {
-        return DB::transaction(function () use ($admin, $datos): Reserva {
+        $reserva = DB::transaction(function () use ($admin, $datos): Reserva {
             $fecha = $datos['fecha'];
             $hora = substr($datos['hora'], 0, 5);
             $personas = (int) $datos['personas'];
@@ -64,6 +66,10 @@ class ReservaAdminService
 
             return $reserva->load(['mesa', 'platos', 'historial']);
         });
+
+        $this->notificaciones->creada($reserva);
+
+        return $reserva;
     }
 
     /**
@@ -127,7 +133,7 @@ class ReservaAdminService
             );
         }
 
-        return DB::transaction(function () use ($reserva, $nuevo, $admin): Reserva {
+        $actualizada = DB::transaction(function () use ($reserva, $nuevo, $admin): Reserva {
             $reserva->forceFill(['estado' => $nuevo])->save();
 
             $this->historial(
@@ -139,6 +145,10 @@ class ReservaAdminService
 
             return $reserva->load(['mesa', 'platos', 'historial']);
         });
+
+        $this->notificaciones->estadoCambiado($actualizada, $admin->nombre);
+
+        return $actualizada;
     }
 
     public function esPasada(Reserva $reserva): bool
