@@ -25,7 +25,9 @@ return new class extends Migration
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('correo', 190)->primary();
+            // Laravel's password broker stores the token by the user's
+            // reset email; the account column is `correo` (->getEmailForPasswordReset).
+            $table->string('email', 190)->primary();
             $table->string('token');
             $table->timestamp('created_at')->nullable();
         });
