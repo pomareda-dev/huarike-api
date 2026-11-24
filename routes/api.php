@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartaController;
 use App\Http\Controllers\Api\V1\DisponibilidadController;
 use App\Http\Controllers\Api\V1\Panel\CalendarioController;
+use App\Http\Controllers\Api\V1\Panel\CambiosController;
 use App\Http\Controllers\Api\V1\Panel\CartaController as PanelCartaController;
 use App\Http\Controllers\Api\V1\Panel\CategoriaController;
 use App\Http\Controllers\Api\V1\Panel\HorarioController;
@@ -119,5 +120,7 @@ Route::prefix('v1')->group(function (): void {
 
             Route::get('calendario', [CalendarioController::class, 'mes']);
             Route::get('calendario/semana', [CalendarioController::class, 'semana']);
+
+            Route::get('cambios', [CambiosController::class, 'index']);
         });
 });
