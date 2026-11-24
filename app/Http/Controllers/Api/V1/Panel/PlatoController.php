@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\V1\Panel;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Panel\ActualizarPlatoRequest;
 use App\Http\Requests\Panel\GuardarPlatoRequest;
+use App\Http\Requests\Panel\SubirFotoRequest;
 use App\Http\Resources\PlatoResource;
 use App\Models\Plato;
+use App\Services\Archivos\FotoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,6 +18,8 @@ use Illuminate\Http\Request;
  */
 class PlatoController extends Controller
 {
+    public function __construct(private readonly FotoService $fotos) {}
+
     public function store(GuardarPlatoRequest $request): JsonResponse
     {
         $plato = Plato::create([
@@ -46,8 +50,23 @@ class PlatoController extends Controller
 
     public function destroy(Request $request, Plato $plato): JsonResponse
     {
+        $this->fotos->eliminar($plato->foto);
         $plato->delete();
 
         return response()->json(['message' => 'Plato eliminado.']);
+    }
+
+    /**
+     * Upload multipart de la foto del plato (docs §8.3).
+     */
+    public function foto(SubirFotoRequest $request, Plato $plato): JsonResponse
+    {
+        $anterior = $plato->foto;
+        $ruta = $this->fotos->guardar($request->file('foto'), 'platos');
+
+        $plato->forceFill(['foto' => $ruta])->save();
+        $this->fotos->eliminar($anterior);
+
+        return response()->json(['foto' => FotoService::url($ruta)]);
     }
 }
