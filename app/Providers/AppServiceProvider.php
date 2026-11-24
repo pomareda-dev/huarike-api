@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Reserva;
 use App\Models\User;
+use App\Policies\ReservaPolicy;
 use App\Policies\UsuarioPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -20,6 +22,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(User::class, UsuarioPolicy::class);
+        Gate::policy(Reserva::class, ReservaPolicy::class);
 
         // Login, registro y recuperación: 5 intentos por minuto y por IP
         // (docs §4 A4).

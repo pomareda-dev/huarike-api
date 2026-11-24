@@ -2,10 +2,13 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartaController;
+use App\Http\Controllers\Api\V1\DisponibilidadController;
 use App\Http\Controllers\Api\V1\Panel\CartaController as PanelCartaController;
 use App\Http\Controllers\Api\V1\Panel\CategoriaController;
+use App\Http\Controllers\Api\V1\Panel\MesaController;
 use App\Http\Controllers\Api\V1\Panel\PlatoController;
 use App\Http\Controllers\Api\V1\Panel\UsuarioController;
+use App\Http\Controllers\Api\V1\ReservaController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -36,6 +39,17 @@ Route::prefix('v1')->group(function (): void {
         Route::get('carta', [CartaController::class, 'carta']);
         Route::get('horarios', [CartaController::class, 'horarios']);
         Route::get('turnos', [CartaController::class, 'turnos']);
+        Route::get('mesas', [DisponibilidadController::class, 'mesasActivas']);
+        Route::get('disponibilidad/mesas', [DisponibilidadController::class, 'mesas']);
+        Route::get('disponibilidad', [DisponibilidadController::class, 'index']);
+    });
+
+    // Reservas del cliente autenticado.
+    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::post('reservas', [ReservaController::class, 'store']);
+        Route::get('mis-reservas', [ReservaController::class, 'index']);
+        Route::get('reservas/{folio}', [ReservaController::class, 'show']);
+        Route::patch('reservas/{folio}/cancelar', [ReservaController::class, 'cancelar']);
     });
 
     // Panel: exclusivo de administradores activos.
@@ -60,5 +74,12 @@ Route::prefix('v1')->group(function (): void {
             Route::post('platos', [PlatoController::class, 'store']);
             Route::match(['put', 'patch'], 'platos/{plato}', [PlatoController::class, 'update']);
             Route::delete('platos/{plato}', [PlatoController::class, 'destroy']);
+
+            Route::get('mesas', [MesaController::class, 'index']);
+            Route::post('mesas', [MesaController::class, 'store']);
+            Route::match(['put', 'patch'], 'mesas/{mesa}', [MesaController::class, 'update']);
+            Route::patch('mesas/{mesa}/activar', [MesaController::class, 'activar']);
+            Route::patch('mesas/{mesa}/desactivar', [MesaController::class, 'desactivar']);
+            Route::delete('mesas/{mesa}', [MesaController::class, 'destroy']);
         });
 });
