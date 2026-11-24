@@ -1,0 +1,1541 @@
+openapi: 3.0.3
+info:
+  title: El Huarike — API de reservas
+  version: 1.0.0
+  description: |
+    API JSON del restaurante El Huarike: sitio público, área de cliente y panel.
+
+    - Prefijo: `/api/v1`
+    - Autenticación: `Authorization: Bearer <token>` (Laravel Sanctum)
+    - Zona horaria: `America/Lima`
+    - Mensajes de error en español
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Entorno local
+  - url: https://api.elhuarike.pe/api/v1
+    description: Producción
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Público
+  - name: Cliente
+  - name: Panel — Reservas
+  - name: Panel — Reportes
+  - name: Panel — Carta
+  - name: Panel — Mesas
+  - name: Panel — Promociones
+  - name: Panel — Horarios
+  - name: Panel — Usuarios
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Registra una cuenta de cliente y devuelve su token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, correo, telefono, password, password_confirmation]
+              properties:
+                nombre: { type: string, minLength: 3, maxLength: 120, example: Lucía Ramírez }
+                correo: { type: string, format: email, example: demo@elhuarike.com }
+                telefono: { type: string, example: "987654321", description: 9 dígitos, admite +51 y espacios }
+                password: { type: string, minLength: 8, example: reservas2024 }
+                password_confirmation: { type: string, example: reservas2024 }
+      responses:
+        '201':
+          description: Cuenta creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Inicia sesión y devuelve el token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [correo, password]
+              properties:
+                correo: { type: string, format: email, example: demo@elhuarike.com }
+                password: { type: string, example: reservas2024 }
+      responses:
+        '200':
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: La contraseña no coincide. }
+                  campo: { type: string, enum: [correo, password] }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/password/email:
+    post:
+      tags: [Auth]
+      summary: Envía el enlace de recuperación (respuesta siempre genérica)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [correo]
+              properties:
+                correo: { type: string, format: email }
+      responses:
+        '200':
+          description: Respuesta genérica exista o no la cuenta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Si el correo existe, te enviamos un enlace para restablecer tu contraseña.
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/password/reset:
+    post:
+      tags: [Auth]
+      summary: Restablece la contraseña con el token del correo y revoca los tokens activos
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, correo, password, password_confirmation]
+              properties:
+                token: { type: string }
+                correo: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                password_confirmation: { type: string }
+      responses:
+        '200':
+          description: Contraseña restablecida
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoca el token actual
+      responses:
+        '200': { description: Sesión cerrada }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Datos de la sesión actual
+      responses:
+        '200':
+          description: Sesión
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /carta:
+    get:
+      tags: [Público]
+      summary: Carta pública con categorías activas y resumen
+      security: []
+      responses:
+        '200':
+          description: Carta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resumen: { $ref: '#/components/schemas/ResumenCarta' }
+                  categorias:
+                    type: array
+                    items: { $ref: '#/components/schemas/Categoria' }
+
+  /promociones:
+    get:
+      tags: [Público]
+      summary: Promociones activas
+      security: []
+      parameters:
+        - name: categoria
+          in: query
+          schema: { type: string, enum: [desayunos, almuerzos, familia] }
+      responses:
+        '200':
+          description: Promociones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  filtros: { type: array, items: { type: string } }
+                  promociones:
+                    type: array
+                    items: { $ref: '#/components/schemas/Promocion' }
+
+  /horarios:
+    get:
+      tags: [Público]
+      summary: Franjas activas y estado del local
+      security: []
+      responses:
+        '200':
+          description: Horarios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  estado: { $ref: '#/components/schemas/EstadoLocal' }
+                  horarios:
+                    type: array
+                    items: { $ref: '#/components/schemas/Horario' }
+
+  /turnos:
+    get:
+      tags: [Público]
+      summary: Turnos activos con sus slots
+      security: []
+      responses:
+        '200':
+          description: Turnos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  turnos:
+                    type: array
+                    items: { $ref: '#/components/schemas/Turno' }
+
+  /mesas:
+    get:
+      tags: [Público]
+      summary: Mesas activas del salón
+      security: []
+      responses:
+        '200':
+          description: Mesas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mesas:
+                    type: array
+                    items: { $ref: '#/components/schemas/Mesa' }
+
+  /disponibilidad:
+    get:
+      tags: [Público]
+      summary: Estado de cada slot del día para un grupo
+      security: []
+      parameters:
+        - name: fecha
+          in: query
+          required: true
+          schema: { type: string, format: date, example: '2026-11-26' }
+        - name: personas
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 6, example: 4 }
+      responses:
+        '200':
+          description: Disponibilidad
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fecha: { type: string, format: date }
+                  personas: { type: integer }
+                  mesas_activas: { type: integer }
+                  slots:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hora: { type: string, example: '13:00' }
+                        turno: { type: string, example: almuerzo }
+                        estado: { type: string, enum: [disponible, alta-demanda, ocupado] }
+                        mesas_libres: { type: integer }
+                        resumen: { type: string, example: Quedan 5 mesas }
+                        pico: { type: boolean }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /disponibilidad/mesas:
+    get:
+      tags: [Público]
+      summary: Mesas que pueden recibir al grupo en una franja
+      security: []
+      parameters:
+        - { name: fecha, in: query, required: true, schema: { type: string, format: date } }
+        - { name: hora, in: query, required: true, schema: { type: string, example: '20:00' } }
+        - { name: personas, in: query, required: true, schema: { type: integer, minimum: 1, maximum: 6 } }
+      responses:
+        '200':
+          description: Mesas válidas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fecha: { type: string, format: date }
+                  hora: { type: string }
+                  personas: { type: integer }
+                  mesas:
+                    type: array
+                    items: { $ref: '#/components/schemas/Mesa' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /reservas:
+    post:
+      tags: [Cliente]
+      summary: Crea una reserva del usuario autenticado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fecha, hora, personas]
+              properties:
+                fecha: { type: string, format: date }
+                hora: { type: string, example: '20:00' }
+                personas: { type: integer, minimum: 1, maximum: 6 }
+                mesa_id: { type: integer, nullable: true, description: Omitido ⇒ lista de espera }
+                notas: { type: string, maxLength: 500, nullable: true }
+                platos:
+                  type: array
+                  items:
+                    type: object
+                    required: [plato_id, cantidad]
+                    properties:
+                      plato_id: { type: integer }
+                      cantidad: { type: integer, minimum: 1, maximum: 20 }
+      responses:
+        '201':
+          description: Reserva creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reserva' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Regla de negocio (mesa ocupada, capacidad, plato agotado)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Esa mesa ya está ocupada en esa franja }
+                  motivo: { type: string, enum: [conflicto, capacidad, mesa-inactiva, plato-no-disponible] }
+                  mesas:
+                    type: array
+                    items: { $ref: '#/components/schemas/Mesa' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /mis-reservas:
+    get:
+      tags: [Cliente]
+      summary: Reservas de la cuenta separadas en próximas y pasadas
+      responses:
+        '200':
+          description: Reservas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  proximas: { type: array, items: { $ref: '#/components/schemas/Reserva' } }
+                  pasadas: { type: array, items: { $ref: '#/components/schemas/Reserva' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reservas/{folio}:
+    get:
+      tags: [Cliente]
+      summary: Detalle de una reserva (dueño o admin)
+      parameters:
+        - { name: folio, in: path, required: true, schema: { type: string, example: HRK-2481 } }
+      responses:
+        '200':
+          description: Reserva
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reserva' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reservas/{folio}/cancelar:
+    patch:
+      tags: [Cliente]
+      summary: Cancela la reserva hasta 2 horas antes del inicio
+      parameters:
+        - { name: folio, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Reserva cancelada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reserva' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Fuera de ventana o ya cancelada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Solo puedes cancelar hasta 2 horas antes. }
+
+  /panel/reservas:
+    get:
+      tags: [Panel — Reservas]
+      summary: Listado filtrado y paginado (6 por página)
+      parameters:
+        - { name: fecha, in: query, schema: { type: string, format: date } }
+        - { name: turno, in: query, schema: { type: string, example: almuerzo } }
+        - { name: estado, in: query, schema: { type: string, enum: [todos, pendiente, confirmada, por-confirmar, lista-espera, no-show, finalizada, cancelada] } }
+        - { name: texto, in: query, schema: { type: string }, description: Busca en nombre, correo, teléfono, folio, mesa y zona sin tildes }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+      responses:
+        '200':
+          description: Página de reservas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Reserva' } }
+                  meta: { $ref: '#/components/schemas/MetaPaginacion' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Panel — Reservas]
+      summary: Alta de reserva desde el panel (mesa obligatoria)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fecha, hora, personas, mesa_id, nombre, correo, telefono]
+              properties:
+                fecha: { type: string, format: date }
+                hora: { type: string }
+                personas: { type: integer, minimum: 1, maximum: 6 }
+                mesa_id: { type: integer }
+                nombre: { type: string, minLength: 3 }
+                correo: { type: string, format: email }
+                telefono: { type: string }
+                notas: { type: string, nullable: true }
+                estado: { type: string, description: Por defecto confirmada }
+                platos:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      plato_id: { type: integer }
+                      cantidad: { type: integer }
+      responses:
+        '201':
+          description: Reserva creada (creada_por = admin)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reserva' }
+        '409': { description: Conflicto de mesa o capacidad }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /panel/reservas/export.csv:
+    get:
+      tags: [Panel — Reservas]
+      summary: CSV con BOM de las reservas filtradas
+      parameters:
+        - { name: fecha, in: query, schema: { type: string, format: date } }
+        - { name: turno, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: texto, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Archivo CSV (Folio, Fecha, Hora, Cliente, Teléfono, Correo, Personas, Mesa, Zona, Estado)
+          content:
+            text/csv:
+              schema: { type: string }
+
+  /panel/reservas/{folio}:
+    get:
+      tags: [Panel — Reservas]
+      summary: Detalle con historial y preorden
+      parameters:
+        - { name: folio, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Reserva
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reserva' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Panel — Reservas]
+      summary: Edita fecha, hora, personas, mesa o datos de contacto
+      parameters:
+        - { name: folio, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fecha: { type: string, format: date }
+                hora: { type: string }
+                personas: { type: integer, minimum: 1, maximum: 6 }
+                mesa_id: { type: integer }
+                nombre: { type: string }
+                correo: { type: string, format: email }
+                telefono: { type: string }
+                notas: { type: string, nullable: true }
+                platos: { type: array, items: { type: object } }
+      responses:
+        '200': { description: Reserva actualizada }
+        '409': { description: Conflicto de mesa }
+
+  /panel/reservas/{folio}/estado:
+    patch:
+      tags: [Panel — Reservas]
+      summary: Cambia el estado y agrega historial
+      parameters:
+        - { name: folio, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              properties:
+                estado: { type: string, enum: [confirmada, por-confirmar, lista-espera, no-show, finalizada, cancelada] }
+      responses:
+        '200': { description: Estado actualizado }
+        '409':
+          description: Transición inválida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Una reserva pasada solo puede marcarse como finalizada o no-show. }
+
+  /panel/reportes:
+    get:
+      tags: [Panel — Reportes]
+      summary: Métricas del día
+      parameters:
+        - { name: fecha, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: KPIs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Metricas' }
+
+  /panel/reportes/rango:
+    get:
+      tags: [Panel — Reportes]
+      summary: Serie diaria para el gráfico de barras
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date } }
+        - { name: hasta, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Serie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  desde: { type: string, format: date }
+                  hasta: { type: string, format: date }
+                  dias:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fecha: { type: string, format: date }
+                        reservas: { type: integer }
+                        comensales: { type: integer }
+                        ocupacion: { type: integer }
+
+  /panel/calendario:
+    get:
+      tags: [Panel — Reportes]
+      summary: Calendario mensual (42 celdas, lunes primero)
+      parameters:
+        - { name: anio, in: query, required: true, schema: { type: integer, example: 2026 } }
+        - { name: mes, in: query, required: true, schema: { type: integer, minimum: 1, maximum: 12 } }
+      responses:
+        '200':
+          description: Celdas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  anio: { type: integer }
+                  mes: { type: integer }
+                  celdas: { type: array, items: { $ref: '#/components/schemas/CeldaCalendario' } }
+
+  /panel/calendario/semana:
+    get:
+      tags: [Panel — Reportes]
+      summary: Calendario semanal (7 días desde el lunes)
+      parameters:
+        - { name: fecha, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Celdas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  desde: { type: string, format: date }
+                  hasta: { type: string, format: date }
+                  celdas: { type: array, items: { $ref: '#/components/schemas/CeldaCalendario' } }
+
+  /panel/cambios:
+    get:
+      tags: [Panel — Reportes]
+      summary: Polling del panel (reservas y mesas modificadas)
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: Cambios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  desde: { type: string, format: date-time }
+                  cambios:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tipo: { type: string, enum: [reserva, mesa] }
+                        id: { type: integer }
+                        folio: { type: string, nullable: true }
+                        numero: { type: integer, nullable: true }
+                        actualizado_en: { type: string, format: date-time }
+
+  /panel/carta:
+    get:
+      tags: [Panel — Carta]
+      summary: Carta completa (incluye inactivas y agotados)
+      responses:
+        '200':
+          description: Carta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resumen: { $ref: '#/components/schemas/ResumenCarta' }
+                  categorias: { type: array, items: { $ref: '#/components/schemas/Categoria' } }
+
+  /panel/categorias:
+    post:
+      tags: [Panel — Carta]
+      summary: Crea una categoría
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre]
+              properties:
+                nombre: { type: string, maxLength: 120 }
+                posicion: { type: integer, nullable: true, description: Por defecto máxima + 1 }
+                activa: { type: boolean }
+      responses:
+        '201': { description: Categoría creada }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /panel/categorias/{categoria}:
+    put:
+      tags: [Panel — Carta]
+      summary: Edita o activa/desactiva una categoría
+      parameters:
+        - { name: categoria, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre]
+              properties:
+                nombre: { type: string }
+                posicion: { type: integer }
+                activa: { type: boolean }
+      responses:
+        '200': { description: Categoría actualizada }
+    delete:
+      tags: [Panel — Carta]
+      summary: Soft-delete (rechazado con platos activos)
+      parameters:
+        - { name: categoria, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Categoría eliminada }
+        '409':
+          description: Categoría con platos activos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  motivo: { type: string, example: categoria-con-platos }
+
+  /panel/platos:
+    post:
+      tags: [Panel — Carta]
+      summary: Crea un plato
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categoria_id, nombre, precio]
+              properties:
+                categoria_id: { type: integer }
+                nombre: { type: string, minLength: 3, maxLength: 150 }
+                descripcion: { type: string, nullable: true }
+                precio: { type: number, format: float, example: 45.5 }
+                etiquetas: { type: array, items: { type: string } }
+                disponible: { type: boolean, default: true }
+      responses:
+        '201': { description: Plato creado }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /panel/platos/{plato}:
+    put:
+      tags: [Panel — Carta]
+      summary: Edita un plato (incluye toggle disponible)
+      parameters:
+        - { name: plato, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categoria_id, nombre, precio]
+              properties:
+                categoria_id: { type: integer }
+                nombre: { type: string }
+                descripcion: { type: string, nullable: true }
+                precio: { type: number }
+                etiquetas: { type: array, items: { type: string } }
+                disponible: { type: boolean }
+      responses:
+        '200': { description: Plato actualizado }
+    delete:
+      tags: [Panel — Carta]
+      summary: Soft-delete de un plato
+      parameters:
+        - { name: plato, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Plato eliminado }
+
+  /panel/platos/{plato}/foto:
+    post:
+      tags: [Panel — Carta]
+      summary: Sube la foto del plato
+      parameters:
+        - { name: plato, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [foto]
+              properties:
+                foto: { type: string, format: binary }
+      responses:
+        '200':
+          description: Foto guardada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  foto: { type: string, example: storage/platos/abc123.jpg }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /panel/mesas:
+    get:
+      tags: [Panel — Mesas]
+      summary: Todas las mesas y asientos activos
+      responses:
+        '200':
+          description: Mesas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mesas: { type: array, items: { $ref: '#/components/schemas/Mesa' } }
+                  asientos_activos: { type: integer, example: 38 }
+    post:
+      tags: [Panel — Mesas]
+      summary: Crea una mesa con el número siguiente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [zona, capacidad]
+              properties:
+                zona: { type: string, enum: [Salón, Terraza] }
+                capacidad: { type: integer, minimum: 1, maximum: 8 }
+      responses:
+        '201': { description: Mesa creada }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /panel/mesas/{mesa}:
+    put:
+      tags: [Panel — Mesas]
+      summary: Edita zona o capacidad
+      parameters:
+        - { name: mesa, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [zona, capacidad]
+              properties:
+                zona: { type: string, enum: [Salón, Terraza] }
+                capacidad: { type: integer, minimum: 1, maximum: 8 }
+                activa: { type: boolean }
+      responses:
+        '200': { description: Mesa actualizada }
+    delete:
+      tags: [Panel — Mesas]
+      summary: Soft-delete (rechazado con reservas futuras activas)
+      parameters:
+        - { name: mesa, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Mesa eliminada }
+        '409':
+          description: Mesa con reservas futuras
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  motivo: { type: string, example: mesa-con-reservas }
+
+  /panel/mesas/{mesa}/activar:
+    patch:
+      tags: [Panel — Mesas]
+      summary: Activa la mesa
+      parameters:
+        - { name: mesa, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Mesa activada }
+
+  /panel/mesas/{mesa}/desactivar:
+    patch:
+      tags: [Panel — Mesas]
+      summary: Desactiva la mesa (no recibe reservas nuevas)
+      parameters:
+        - { name: mesa, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Mesa desactivada }
+
+  /panel/promociones:
+    get:
+      tags: [Panel — Promociones]
+      summary: Todas las promociones
+      responses:
+        '200':
+          description: Promociones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  promociones: { type: array, items: { $ref: '#/components/schemas/Promocion' } }
+    post:
+      tags: [Panel — Promociones]
+      summary: Crea una promoción (slug derivado del nombre)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, vigencia, categoria, codigo, precio_texto]
+              properties:
+                nombre: { type: string }
+                slug: { type: string, nullable: true }
+                destacada: { type: boolean }
+                vigencia: { type: string }
+                categoria: { type: string, enum: [desayunos, almuerzos, familia] }
+                condiciones: { type: array, items: { type: string } }
+                codigo: { type: string }
+                precio_texto: { type: string }
+                activa: { type: boolean }
+      responses:
+        '201': { description: Promoción creada }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /panel/promociones/{promocion}:
+    put:
+      tags: [Panel — Promociones]
+      summary: Edita, destaca o activa/desactiva
+      parameters:
+        - { name: promocion, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, vigencia, categoria, codigo, precio_texto]
+              properties:
+                nombre: { type: string }
+                destacada: { type: boolean }
+                vigencia: { type: string }
+                categoria: { type: string, enum: [desayunos, almuerzos, familia] }
+                condiciones: { type: array, items: { type: string } }
+                codigo: { type: string }
+                precio_texto: { type: string }
+                activa: { type: boolean }
+      responses:
+        '200': { description: Promoción actualizada }
+    delete:
+      tags: [Panel — Promociones]
+      summary: Soft-delete
+      parameters:
+        - { name: promocion, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Promoción eliminada }
+
+  /panel/promociones/{promocion}/foto:
+    post:
+      tags: [Panel — Promociones]
+      summary: Sube la foto de la promoción
+      parameters:
+        - { name: promocion, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [foto]
+              properties:
+                foto: { type: string, format: binary }
+      responses:
+        '200':
+          description: Foto guardada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  foto: { type: string, example: storage/promociones/abc123.jpg }
+
+  /panel/horarios:
+    get:
+      tags: [Panel — Horarios]
+      summary: Todas las franjas, incluidas inactivas
+      responses:
+        '200':
+          description: Franjas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  horarios: { type: array, items: { $ref: '#/components/schemas/Horario' } }
+    post:
+      tags: [Panel — Horarios]
+      summary: Crea una franja de atención
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, dias, abre, cierra]
+              properties:
+                nombre: { type: string, maxLength: 60 }
+                dias: { type: array, items: { type: integer, minimum: 0, maximum: 6 }, minItems: 1 }
+                abre: { type: string, example: '12:00' }
+                cierra: { type: string, example: '17:00' }
+                activa: { type: boolean }
+      responses:
+        '201': { description: Franja creada }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /panel/horarios/{horario}:
+    put:
+      tags: [Panel — Horarios]
+      summary: Edita o activa/desactiva una franja
+      parameters:
+        - { name: horario, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, dias, abre, cierra]
+              properties:
+                nombre: { type: string }
+                dias: { type: array, items: { type: integer } }
+                abre: { type: string }
+                cierra: { type: string }
+                activa: { type: boolean }
+      responses:
+        '200': { description: Franja actualizada }
+    delete:
+      tags: [Panel — Horarios]
+      summary: Elimina (rechazado con reservas futuras)
+      parameters:
+        - { name: horario, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Franja eliminada }
+        '409':
+          description: Con reservas futuras
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  motivo: { type: string, example: franja-con-reservas }
+
+  /panel/turnos:
+    get:
+      tags: [Panel — Horarios]
+      summary: Todos los turnos, incluidos inactivos
+      responses:
+        '200':
+          description: Turnos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  turnos: { type: array, items: { $ref: '#/components/schemas/Turno' } }
+    post:
+      tags: [Panel — Horarios]
+      summary: Crea un turno (slots únicos y ordenados)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, nombre, slots]
+              properties:
+                id: { type: string, example: merienda }
+                nombre: { type: string, example: Merienda }
+                slots: { type: array, items: { type: string }, example: ['16:00', '16:30'] }
+                activa: { type: boolean }
+      responses:
+        '201': { description: Turno creado }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /panel/turnos/{turno}:
+    put:
+      tags: [Panel — Horarios]
+      summary: Edita slots o activa/desactiva un turno
+      parameters:
+        - { name: turno, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, slots]
+              properties:
+                nombre: { type: string }
+                slots: { type: array, items: { type: string } }
+                activa: { type: boolean }
+      responses:
+        '200': { description: Turno actualizado }
+    delete:
+      tags: [Panel — Horarios]
+      summary: Elimina (rechazado con reservas futuras)
+      parameters:
+        - { name: turno, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Turno eliminado }
+        '409':
+          description: Con reservas futuras
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  motivo: { type: string, example: turno-con-reservas }
+
+  /panel/usuarios:
+    get:
+      tags: [Panel — Usuarios]
+      summary: Listado filtrado y paginado (6 por página)
+      parameters:
+        - { name: texto, in: query, schema: { type: string } }
+        - { name: rol, in: query, schema: { type: string, enum: [todos, admin, cliente] } }
+        - { name: estado, in: query, schema: { type: string, enum: [todas, activa, inactiva] } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+      responses:
+        '200':
+          description: Usuarios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/User' } }
+                  meta: { $ref: '#/components/schemas/MetaPaginacion' }
+    post:
+      tags: [Panel — Usuarios]
+      summary: Crea un usuario cliente o admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, correo, telefono, rol, password, password_confirmation]
+              properties:
+                nombre: { type: string, minLength: 3 }
+                correo: { type: string, format: email }
+                telefono: { type: string }
+                rol: { type: string, enum: [admin, cliente] }
+                password: { type: string, minLength: 8 }
+                password_confirmation: { type: string }
+      responses:
+        '201': { description: Usuario creado }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /panel/usuarios/resumen:
+    get:
+      tags: [Panel — Usuarios]
+      summary: Totales del panel de usuarios
+      responses:
+        '200':
+          description: Resumen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  administradores: { type: integer }
+                  inactivas: { type: integer }
+
+  /panel/usuarios/export.csv:
+    get:
+      tags: [Panel — Usuarios]
+      summary: CSV con BOM (Alta, Usuario, Correo, Rol, Estado)
+      responses:
+        '200':
+          description: Archivo CSV
+          content:
+            text/csv:
+              schema: { type: string }
+
+  /panel/usuarios/{usuario}:
+    put:
+      tags: [Panel — Usuarios]
+      summary: Edita nombre, correo, teléfono y rol
+      parameters:
+        - { name: usuario, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, correo, telefono, rol]
+              properties:
+                nombre: { type: string }
+                correo: { type: string, format: email }
+                telefono: { type: string }
+                rol: { type: string, enum: [admin, cliente] }
+      responses:
+        '200': { description: Usuario actualizado }
+        '409':
+          description: R2 (último admin activo)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  motivo: { type: string, example: ultimo-admin }
+
+  /panel/usuarios/{usuario}/activar:
+    patch:
+      tags: [Panel — Usuarios]
+      summary: Activa la cuenta
+      parameters:
+        - { name: usuario, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Cuenta activada }
+
+  /panel/usuarios/{usuario}/desactivar:
+    patch:
+      tags: [Panel — Usuarios]
+      summary: Desactiva la cuenta y revoca sus tokens
+      parameters:
+        - { name: usuario, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Cuenta desactivada }
+        '409':
+          description: R1 (autodesactivación) o R2 (último admin)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  motivo: { type: string, enum: [autodesactivacion, ultimo-admin] }
+
+  /panel/usuarios/{usuario}/rol:
+    patch:
+      tags: [Panel — Usuarios]
+      summary: Cambia el rol respetando R2
+      parameters:
+        - { name: usuario, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rol]
+              properties:
+                rol: { type: string, enum: [admin, cliente] }
+      responses:
+        '200': { description: Rol actualizado }
+        '409': { description: Último admin activo }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+
+  responses:
+    Unauthorized:
+      description: Falta el token o expiró
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorSimple' }
+    Forbidden:
+      description: Rol insuficiente o recurso ajeno
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorSimple' }
+    NotFound:
+      description: Recurso inexistente
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorSimple' }
+    ValidationError:
+      description: Error de validación
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: Los datos enviados no son válidos }
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items: { type: string }
+    TooManyRequests:
+      description: Rate limit excedido
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorSimple' }
+
+  schemas:
+    ErrorSimple:
+      type: object
+      properties:
+        message: { type: string }
+
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        correo: { type: string, format: email }
+        telefono: { type: string }
+        rol: { type: string, enum: [admin, cliente] }
+        activa: { type: boolean }
+        creado_en: { type: string, format: date-time }
+        actualizado_en: { type: string, format: date-time }
+
+    ResumenCarta:
+      type: object
+      properties:
+        categorias: { type: integer }
+        platos: { type: integer }
+        disponibles: { type: integer }
+        agotados: { type: integer }
+
+    Categoria:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        posicion: { type: integer }
+        activa: { type: boolean }
+        platos:
+          type: array
+          items: { $ref: '#/components/schemas/Plato' }
+
+    Plato:
+      type: object
+      properties:
+        id: { type: integer }
+        categoria_id: { type: integer }
+        nombre: { type: string }
+        descripcion: { type: string, nullable: true }
+        precio: { type: number, format: float }
+        etiquetas: { type: array, items: { type: string } }
+        foto: { type: string, nullable: true, example: storage/platos/abc.jpg }
+        disponible: { type: boolean }
+        actualizado_en: { type: string, format: date-time }
+
+    Promocion:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        slug: { type: string }
+        destacada: { type: boolean }
+        vigencia: { type: string }
+        categoria: { type: string, enum: [desayunos, almuerzos, familia] }
+        condiciones: { type: array, items: { type: string } }
+        codigo: { type: string }
+        precio_texto: { type: string }
+        foto: { type: string, nullable: true }
+        activa: { type: boolean }
+        actualizado_en: { type: string, format: date-time }
+
+    Horario:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        dias: { type: array, items: { type: integer, minimum: 0, maximum: 6 } }
+        abre: { type: string, example: '08:00' }
+        cierra: { type: string, example: '12:00' }
+        activa: { type: boolean }
+        actualizado_en: { type: string, format: date-time }
+
+    Turno:
+      type: object
+      properties:
+        id: { type: string, example: almuerzo }
+        nombre: { type: string, example: Almuerzo }
+        slots: { type: array, items: { type: string } }
+        activa: { type: boolean }
+        actualizado_en: { type: string, format: date-time }
+
+    Mesa:
+      type: object
+      properties:
+        id: { type: integer }
+        numero: { type: integer }
+        zona: { type: string, enum: [Salón, Terraza] }
+        capacidad: { type: integer }
+        activa: { type: boolean }
+        actualizado_en: { type: string, format: date-time }
+
+    EstadoLocal:
+      type: object
+      properties:
+        abierto: { type: boolean }
+        franja: { type: string, nullable: true, example: almuerzos }
+        franja_nombre: { type: string, nullable: true }
+        cierra_a: { type: string, nullable: true, example: '17:00' }
+        mensaje: { type: string, example: Abierto ahora · cierra a las 17:00 }
+        proxima_apertura:
+          type: object
+          nullable: true
+          properties:
+            dia: { type: string, example: lunes }
+            hora: { type: string, example: '08:00' }
+            franja: { type: string, example: desayunos }
+
+    Reserva:
+      type: object
+      properties:
+        folio: { type: string, example: HRK-2481 }
+        fecha: { type: string, format: date }
+        fecha_larga: { type: string, example: jueves, 26 de noviembre }
+        hora: { type: string, example: '20:00' }
+        turno: { type: string, nullable: true, example: cena }
+        personas: { type: integer }
+        estado: { type: string, enum: [confirmada, por-confirmar, lista-espera, no-show, finalizada, cancelada] }
+        estado_etiqueta: { type: string }
+        nombre: { type: string }
+        correo: { type: string, format: email }
+        telefono: { type: string }
+        notas: { type: string, nullable: true }
+        subtotal: { type: number, format: float }
+        creada_por: { type: string, nullable: true }
+        tolerancia_minutos: { type: integer, example: 15 }
+        mesa:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            numero: { type: integer }
+            zona: { type: string }
+            capacidad: { type: integer }
+        platos:
+          type: array
+          items:
+            type: object
+            properties:
+              plato_id: { type: integer, nullable: true }
+              nombre: { type: string }
+              precio: { type: number, format: float }
+              cantidad: { type: integer }
+              importe: { type: number, format: float }
+        historial:
+          type: array
+          items:
+            type: object
+            properties:
+              tipo: { type: string, example: creacion }
+              texto: { type: string }
+              autor: { type: string }
+              cuando: { type: string, format: date-time }
+        actualizado_en: { type: string, format: date-time }
+
+    MetaPaginacion:
+      type: object
+      properties:
+        pagina: { type: integer }
+        por_pagina: { type: integer }
+        total: { type: integer }
+        total_paginas: { type: integer }
+        desde: { type: integer }
+        hasta: { type: integer }
+        resumen:
+          type: object
+          properties:
+            reservas: { type: integer }
+            personas: { type: integer }
+
+    Metricas:
+      type: object
+      properties:
+        fecha: { type: string, format: date }
+        reservas: { type: integer }
+        comensales: { type: integer }
+        no_show: { type: integer }
+        porcentaje_no_show: { type: integer }
+        reservas_ayer: { type: integer }
+        delta: { type: integer }
+        mesas_activas: { type: integer }
+        ocupacion:
+          type: object
+          properties:
+            almuerzo: { type: integer }
+            cena: { type: integer }
+            promedio: { type: integer }
+            por_turno:
+              type: object
+              additionalProperties: { type: integer }
+
+    CeldaCalendario:
+      type: object
+      properties:
+        fecha: { type: string, format: date }
+        dia: { type: integer }
+        del_mes: { type: boolean }
+        pasado: { type: boolean }
+        es_hoy: { type: boolean }
+        reservas: { type: integer }
+        personas: { type: integer }
+        ocupacion:
+          type: object
+          properties:
+            almuerzo: { type: integer }
+            cena: { type: integer }
+            promedio: { type: integer }
+        ocupadas_pico: { type: integer }
+        mesas_activas: { type: integer }

@@ -62,7 +62,7 @@ Route::prefix('v1')->group(function (): void {
     });
 
     // Panel: exclusivo de administradores activos.
-    Route::middleware(['auth:sanctum', 'can:viewAny,App\Models\User'])
+    Route::middleware(['auth:sanctum', 'throttle:panel', 'can:viewAny,App\Models\User'])
         ->prefix('panel')
         ->group(function (): void {
             Route::get('usuarios/resumen', [UsuarioController::class, 'resumen']);
