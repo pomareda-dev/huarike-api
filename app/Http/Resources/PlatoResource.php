@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Plato;
+use App\Services\Archivos\FotoService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -23,7 +24,7 @@ class PlatoResource extends JsonResource
             'descripcion' => $this->descripcion,
             'precio' => (float) $this->precio,
             'etiquetas' => $this->etiquetas ?? [],
-            'foto' => $this->foto,
+            'foto' => FotoService::url($this->foto),
             'disponible' => $this->disponible,
             'actualizado_en' => $this->updated_at?->toIso8601String(),
         ];

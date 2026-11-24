@@ -6,11 +6,15 @@ use App\Http\Controllers\Api\V1\DisponibilidadController;
 use App\Http\Controllers\Api\V1\Panel\CalendarioController;
 use App\Http\Controllers\Api\V1\Panel\CartaController as PanelCartaController;
 use App\Http\Controllers\Api\V1\Panel\CategoriaController;
+use App\Http\Controllers\Api\V1\Panel\HorarioController;
 use App\Http\Controllers\Api\V1\Panel\MesaController;
 use App\Http\Controllers\Api\V1\Panel\PlatoController;
+use App\Http\Controllers\Api\V1\Panel\PromocionController as PanelPromocionController;
 use App\Http\Controllers\Api\V1\Panel\ReporteController;
 use App\Http\Controllers\Api\V1\Panel\ReservaController as PanelReservaController;
+use App\Http\Controllers\Api\V1\Panel\TurnoController;
 use App\Http\Controllers\Api\V1\Panel\UsuarioController;
+use App\Http\Controllers\Api\V1\PromocionController;
 use App\Http\Controllers\Api\V1\ReservaController;
 use Illuminate\Support\Facades\Route;
 
@@ -45,6 +49,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('mesas', [DisponibilidadController::class, 'mesasActivas']);
         Route::get('disponibilidad/mesas', [DisponibilidadController::class, 'mesas']);
         Route::get('disponibilidad', [DisponibilidadController::class, 'index']);
+        Route::get('promociones', [PromocionController::class, 'index']);
     });
 
     // Reservas del cliente autenticado.
@@ -77,6 +82,23 @@ Route::prefix('v1')->group(function (): void {
             Route::post('platos', [PlatoController::class, 'store']);
             Route::match(['put', 'patch'], 'platos/{plato}', [PlatoController::class, 'update']);
             Route::delete('platos/{plato}', [PlatoController::class, 'destroy']);
+            Route::post('platos/{plato}/foto', [PlatoController::class, 'foto']);
+
+            Route::get('promociones', [PanelPromocionController::class, 'index']);
+            Route::post('promociones', [PanelPromocionController::class, 'store']);
+            Route::match(['put', 'patch'], 'promociones/{promocion}', [PanelPromocionController::class, 'update']);
+            Route::delete('promociones/{promocion}', [PanelPromocionController::class, 'destroy']);
+            Route::post('promociones/{promocion}/foto', [PanelPromocionController::class, 'foto']);
+
+            Route::get('horarios', [HorarioController::class, 'index']);
+            Route::post('horarios', [HorarioController::class, 'store']);
+            Route::match(['put', 'patch'], 'horarios/{horario}', [HorarioController::class, 'update']);
+            Route::delete('horarios/{horario}', [HorarioController::class, 'destroy']);
+
+            Route::get('turnos', [TurnoController::class, 'index']);
+            Route::post('turnos', [TurnoController::class, 'store']);
+            Route::match(['put', 'patch'], 'turnos/{turno}', [TurnoController::class, 'update']);
+            Route::delete('turnos/{turno}', [TurnoController::class, 'destroy']);
 
             Route::get('mesas', [MesaController::class, 'index']);
             Route::post('mesas', [MesaController::class, 'store']);
