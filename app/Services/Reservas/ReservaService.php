@@ -9,6 +9,7 @@ use App\Models\Reserva;
 use App\Models\ReservaHistorial;
 use App\Models\ReservaPlato;
 use App\Models\User;
+use App\Services\Notificaciones\ReservaNotificaciones;
 use App\Support\Fechas;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +23,7 @@ class ReservaService
     public function __construct(
         private readonly DisponibilidadService $disponibilidad,
         private readonly PreordenService $preorden,
+        private readonly ReservaNotificaciones $notificaciones,
     ) {}
 
     /**
@@ -34,7 +36,7 @@ class ReservaService
         $personas = (int) $datos['personas'];
         $mesaId = isset($datos['mesa_id']) ? (int) $datos['mesa_id'] : null;
 
-        return DB::transaction(function () use ($cliente, $datos, $fecha, $hora, $personas, $mesaId, $creadaPor): Reserva {
+        $reserva = DB::transaction(function () use ($cliente, $datos, $fecha, $hora, $personas, $mesaId, $creadaPor): Reserva {
             if ($mesaId !== null) {
                 $this->verificarMesa($mesaId, $fecha, $hora, $personas);
             }
@@ -77,6 +79,10 @@ class ReservaService
 
             return $reserva->load(['mesa', 'platos', 'historial']);
         });
+
+        $this->notificaciones->creada($reserva);
+
+        return $reserva;
     }
 
     /**
@@ -99,7 +105,7 @@ class ReservaService
             throw new ReglaNegocioException("Solo puedes cancelar hasta {$horas} horas antes.");
         }
 
-        return DB::transaction(function () use ($reserva, $actor, $comoAdmin): Reserva {
+        $cancelada = DB::transaction(function () use ($reserva, $actor, $comoAdmin): Reserva {
             $reserva->forceFill(['estado' => EstadoReserva::Cancelada])->save();
 
             $this->registrarHistorial(
@@ -111,6 +117,10 @@ class ReservaService
 
             return $reserva->load(['mesa', 'platos', 'historial']);
         });
+
+        $this->notificaciones->cancelada($cancelada, $actor->nombre);
+
+        return $cancelada;
     }
 
     /**
