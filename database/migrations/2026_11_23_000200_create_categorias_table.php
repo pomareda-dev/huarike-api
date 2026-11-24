@@ -14,6 +14,8 @@ return new class extends Migration
             $table->smallInteger('posicion')->default(0);
             $table->boolean('activa')->default(true);
             $table->timestamps();
+            // El contrato del panel elimina categorías con soft-delete (docs §5.1).
+            $table->softDeletes();
 
             $table->index(['activa', 'posicion']);
         });
