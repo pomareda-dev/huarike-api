@@ -71,6 +71,23 @@ class User extends Authenticatable
     }
 
     /**
+     * El identificador de correo del dominio es `correo`, no `email`: el
+     * broker de contraseñas y las notificaciones deben usar esa columna.
+     */
+    public function getEmailForPasswordReset(): string
+    {
+        return $this->correo;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function routeNotificationForMail(): array|string
+    {
+        return [$this->correo => $this->nombre];
+    }
+
+    /**
      * Cuentas que pueden iniciar sesión: activas y con correo verificado
      * por registro propio (el prototipo no maneja verificación, así que solo
      * importa `activa`).

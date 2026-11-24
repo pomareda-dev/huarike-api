@@ -78,11 +78,13 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'es'),
+    // El contrato con el SPA exige mensajes visibles en español (docs §6), así
+    // que el locale no depende de APP_LOCALE en el entorno.
+    'locale' => 'es',
 
-    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'es'),
+    'fallback_locale' => 'es',
 
-    'faker_locale' => env('APP_FAKER_LOCALE', 'es_PE'),
+    'faker_locale' => 'es_PE',
 
     /*
     |--------------------------------------------------------------------------
