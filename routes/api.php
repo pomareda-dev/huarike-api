@@ -3,10 +3,13 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartaController;
 use App\Http\Controllers\Api\V1\DisponibilidadController;
+use App\Http\Controllers\Api\V1\Panel\CalendarioController;
 use App\Http\Controllers\Api\V1\Panel\CartaController as PanelCartaController;
 use App\Http\Controllers\Api\V1\Panel\CategoriaController;
 use App\Http\Controllers\Api\V1\Panel\MesaController;
 use App\Http\Controllers\Api\V1\Panel\PlatoController;
+use App\Http\Controllers\Api\V1\Panel\ReporteController;
+use App\Http\Controllers\Api\V1\Panel\ReservaController as PanelReservaController;
 use App\Http\Controllers\Api\V1\Panel\UsuarioController;
 use App\Http\Controllers\Api\V1\ReservaController;
 use Illuminate\Support\Facades\Route;
@@ -81,5 +84,18 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('mesas/{mesa}/activar', [MesaController::class, 'activar']);
             Route::patch('mesas/{mesa}/desactivar', [MesaController::class, 'desactivar']);
             Route::delete('mesas/{mesa}', [MesaController::class, 'destroy']);
+
+            Route::get('reservas/export.csv', [PanelReservaController::class, 'exportCsv']);
+            Route::get('reservas', [PanelReservaController::class, 'index']);
+            Route::post('reservas', [PanelReservaController::class, 'store']);
+            Route::get('reservas/{folio}', [PanelReservaController::class, 'show']);
+            Route::match(['put', 'patch'], 'reservas/{folio}', [PanelReservaController::class, 'update']);
+            Route::patch('reservas/{folio}/estado', [PanelReservaController::class, 'estado']);
+
+            Route::get('reportes', [ReporteController::class, 'index']);
+            Route::get('reportes/rango', [ReporteController::class, 'rango']);
+
+            Route::get('calendario', [CalendarioController::class, 'mes']);
+            Route::get('calendario/semana', [CalendarioController::class, 'semana']);
         });
 });
