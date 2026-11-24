@@ -5,7 +5,6 @@ namespace App\Services\Reservas;
 use App\Enums\EstadoReserva;
 use App\Exceptions\ReglaNegocioException;
 use App\Models\Mesa;
-use App\Models\Plato;
 use App\Models\Reserva;
 use App\Models\ReservaHistorial;
 use App\Models\ReservaPlato;
@@ -20,7 +19,10 @@ use Illuminate\Support\Facades\DB;
  */
 class ReservaService
 {
-    public function __construct(private readonly DisponibilidadService $disponibilidad) {}
+    public function __construct(
+        private readonly DisponibilidadService $disponibilidad,
+        private readonly PreordenService $preorden,
+    ) {}
 
     /**
      * @param  array{fecha: string, hora: string, personas: int, mesa_id?: int|null, notas?: string|null, platos?: list<array{plato_id: int, cantidad: int}>}  $datos
@@ -37,7 +39,7 @@ class ReservaService
                 $this->verificarMesa($mesaId, $fecha, $hora, $personas);
             }
 
-            [$platos, $subtotal] = $this->prepararPreorden($datos['platos'] ?? []);
+            [$platos, $subtotal] = $this->preorden->preparar($datos['platos'] ?? []);
 
             $reserva = Reserva::create([
                 'folio' => $this->siguienteFolio(),
@@ -205,51 +207,6 @@ class ReservaService
             ])
             ->values()
             ->all();
-    }
-
-    /**
-     * Snapshot de nombre y precio de la preorden; los platos deben existir y
-     * estar disponibles.
-     *
-     * @param  list<array{plato_id: int, cantidad: int}>  $solicitados
-     * @return array{0: list<array<string, mixed>>, 1: float}
-     */
-    private function prepararPreorden(array $solicitados): array
-    {
-        if ($solicitados === []) {
-            return [[], 0.0];
-        }
-
-        $ids = array_unique(array_map(static fn (array $fila) => (int) $fila['plato_id'], $solicitados));
-
-        $platos = Plato::query()->disponibles()->whereIn('id', $ids)->get()->keyBy('id');
-
-        if ($platos->count() !== count($ids)) {
-            throw new ReglaNegocioException(
-                'Uno de los platos de tu preorden ya no está disponible.',
-                ['motivo' => 'plato-no-disponible'],
-            );
-        }
-
-        $filas = [];
-        $subtotal = 0.0;
-
-        foreach ($solicitados as $fila) {
-            /** @var Plato $plato */
-            $plato = $platos[(int) $fila['plato_id']];
-            $cantidad = (int) $fila['cantidad'];
-
-            $filas[] = [
-                'plato_id' => $plato->id,
-                'nombre' => $plato->nombre,
-                'precio' => (float) $plato->precio,
-                'cantidad' => $cantidad,
-            ];
-
-            $subtotal += (float) $plato->precio * $cantidad;
-        }
-
-        return [$filas, round($subtotal, 2)];
     }
 
     private function registrarHistorial(Reserva $reserva, string $tipo, string $texto, string $autor): void
